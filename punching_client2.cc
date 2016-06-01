@@ -21,7 +21,7 @@
 const short     PORT    = 9999;
 const char*     PORT_S  = "9999";
 const char*     IP      = "127.0.0.1";
-const char*     SVR_IP  = "127.0.0.1";
+const char*     SVR_IP  = "104.224.134.43";
 const short     SVR_PORT= 9981;
 const size_t    BUF_LEN = 1500;
 //---------------------------------------------------------------------------

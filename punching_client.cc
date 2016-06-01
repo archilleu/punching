@@ -19,8 +19,8 @@
 //---------------------------------------------------------------------------
 const short     PORT    = 8888;
 const char*     PORT_S  = "8888";
+const char*     SVR_IP  = "104.224.134.43";
 const char*     IP      = "127.0.0.1";
-const char*     SVR_IP  = "127.0.0.1";
 const short     SVR_PORT= 9981;
 const size_t    BUF_LEN = 1500;
 //---------------------------------------------------------------------------
@@ -121,6 +121,16 @@ int main(int , char** )
         close(fd);
         return 1;
     }
+
+    //set ttl
+    int cur_ttl = 0;
+    socklen_t len_ttl = sizeof(int);
+    getsockopt(fd, IPPROTO_IP, IP_TTL, (char*)&cur_ttl, &len_ttl);
+    printf("cur ttl:%d\n", cur_ttl);
+    cur_ttl = 100;
+    setsockopt(fd, IPPROTO_IP, IP_TTL, (char*)&cur_ttl, sizeof(cur_ttl));
+    getsockopt(fd, IPPROTO_IP, IP_TTL, (char*)&cur_ttl, &len_ttl);
+    printf("cur ttl:%d\n", cur_ttl);
 
     //send msg
     std::string local_ip;

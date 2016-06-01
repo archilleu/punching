@@ -109,6 +109,20 @@ void Punching(int fd, const std::string& buffer, struct sockaddr_in& peer_addr)
     printf("punching msg:%s\n", msg.c_str());
     printf("punching msg self:%s\n", msg1.c_str());
 
+    struct sockaddr_in addr1;
+    bzero(&addr1, sizeof(addr1));
+    addr1.sin_family = AF_INET;
+    addr1.sin_port = htons(std::atoi(iter_self->second.wan_port.c_str()));
+    inet_pton(AF_INET, iter_self->second.wan_ip.c_str(), &addr1.sin_addr);
+
+    printf("port1:%d, port2:%d\n", peer_addr.sin_port, addr1.sin_port);
+    printf("ip1:%d, ip2:%d\n", peer_addr.sin_addr.s_addr, addr1.sin_addr.s_addr);
+    printf("family:%d, family2:%d\n", peer_addr.sin_family, addr1.sin_family);
+    if(0 == memcmp(&peer_addr, &addr1, sizeof(addr1)))
+        printf("equal\n");
+    else
+        printf("no equal\n");
+
     struct sockaddr_in addr;
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;
@@ -116,7 +130,7 @@ void Punching(int fd, const std::string& buffer, struct sockaddr_in& peer_addr)
     inet_pton(AF_INET, iter->second.wan_ip.c_str(), &addr.sin_addr);
 
     socklen_t len = sizeof(sockaddr_in);
-    if(0 > sendto(fd, msg.data(), msg.size()+1, 0, (sockaddr*)&peer_addr, len))
+    if(0 > sendto(fd, msg.data(), msg.size()+1, 0, (sockaddr*)&addr1, len))
     {
         perror("send to error");
         return;
@@ -174,7 +188,8 @@ int main(int , char** )
     bzero(&local_addr, sizeof(struct sockaddr_in));
     local_addr.sin_family       = AF_INET;
     local_addr.sin_port         = htons(PORT);
-    inet_pton(AF_INET, IP, &local_addr.sin_addr);
+    //inet_pton(AF_INET, IP, &local_addr.sin_addr);
+    local_addr.sin_addr.s_addr = INADDR_ANY;
 
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void*)&opt, sizeof(opt));
@@ -191,12 +206,14 @@ int main(int , char** )
     char                buffer[BUF_LEN];
     while(true)
     {
+        printf("receiveing...\n");
         int rcv_len = recvfrom(fd, static_cast<void*>(buffer), BUF_LEN, 0, (struct sockaddr*)&peer_addr, &addr_len);
         if(0 >= rcv_len)
         {
             perror("recv_from:");
             return 1;
         }
+        printf("rece:%s\n", buffer);
 
         CMD_Dsipatch(fd, buffer, peer_addr);
     }
