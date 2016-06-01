@@ -16,9 +16,10 @@
 #include <netinet/in.h> 
 #include <string.h> 
 #include <arpa/inet.h>
+#include <iostream>
 //---------------------------------------------------------------------------
-const short     PORT    = 8888;
-const char*     PORT_S  = "8888";
+const short     PORT    = 9999;
+const char*     PORT_S  = "9999";
 const char*     IP      = "127.0.0.1";
 const char*     SVR_IP  = "127.0.0.1";
 const short     SVR_PORT= 9981;
@@ -127,7 +128,7 @@ int main(int , char** )
     std::string local_port = PORT_S;
     GetLocalAddress(&local_ip);
     printf("local ip:%s local port:%s\n", local_ip.c_str(), local_port.c_str());
-    std::string msg = Register("pc_client1", local_ip, local_port);
+    std::string msg = Register("pc_client2", local_ip, local_port);
 
     struct sockaddr_in svr_addr;
     bzero(&svr_addr, sizeof(struct sockaddr_in));
@@ -138,7 +139,7 @@ int main(int , char** )
     socklen_t           len = sizeof(struct sockaddr_in);
     char                buf_ip[8];
     char                buf_port[INET_ADDRSTRLEN];
-    socklen_t           addr_len = sizeof(struct sockaddr_in);
+    socklen_t           addr_len;
     char                buffer[BUF_LEN];
     struct sockaddr_in  peer_addr;
     //while(true)
@@ -152,16 +153,7 @@ int main(int , char** )
             return 1;
         }
 
-        //punching pc_client2 
-        msg = "punching|pc_client1|pc_client2";
-        snd_len = sendto(fd, msg.data(), msg.size()+1, 0, (const sockaddr*)&svr_addr, len);
-        if(snd_len < 0)
-        {
-            perror("recv_from:");
-            close(fd);
-            return 1;
-        }
-
+        //wait punching cmd
         int rcv_len = recvfrom(fd, static_cast<void*>(buffer), BUF_LEN, 0, (struct sockaddr*)&peer_addr, &addr_len);
         if(0 >= rcv_len)
         {
@@ -170,7 +162,7 @@ int main(int , char** )
             return 1;
         }
 
-        sprintf(buf_port, "%d", ntohs(peer_addr.sin_port));
+        sprintf(buf_port, "%u", ntohs(peer_addr.sin_port));
         inet_ntop(AF_INET, &peer_addr.sin_addr, buf_ip, INET_ADDRSTRLEN);
         printf("peer client ip:%s, port:%s\n", buf_ip, buf_port);
         printf("msg:%s\n", buffer);
@@ -197,15 +189,18 @@ int main(int , char** )
 
         for(;;)
         {
-            int rcv_len = recvfrom(fd, static_cast<void*>(buffer), BUF_LEN, 0, (struct sockaddr*)&peer_addr, &addr_len);
-            if(0 >= rcv_len)
+            std::string input;
+            std::cin >> input;
+            
+            printf("input msg:%s\n", input.c_str());
+            snd_len = sendto(fd, input.data(), input.size()+1, 0, (const sockaddr*)&addr, len);
+            if(snd_len < 0)
             {
                 perror("recv_from:");
                 close(fd);
                 return 1;
             }
         
-            printf("recv msg:%s\n", buffer);
         }
     }
 

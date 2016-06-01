@@ -25,7 +25,7 @@ struct ClientInfo
 //---------------------------------------------------------------------------
 std::map<std::string, ClientInfo> g_name_info;
 //---------------------------------------------------------------------------
-bool Decode(const std::string& buffer, std::string* name, std::string* lan_ip, std::string* lan_port)
+bool Register(const std::string& buffer, std::string* name, std::string* lan_ip, std::string* lan_port)
 {
     //buffer format "name|ip|port"
 
@@ -54,7 +54,7 @@ bool AddClient(const std::string& buffer, const std::string& wan_ip, const std::
     std::string name;
     std::string ip;
     std::string port;
-    if(false == Decode(buffer, &name, &ip, &port))
+    if(false == Register(buffer, &name, &ip, &port))
     {
         printf("msg format error:(name|ip|port)\n");
         return false;
@@ -76,6 +76,91 @@ bool AddClient(const std::string& buffer, const std::string& wan_ip, const std::
     return true;
 }
 //---------------------------------------------------------------------------
+void Punching(int fd, const std::string& buffer, struct sockaddr_in& peer_addr)
+{
+    //format selfname|punchingname
+    
+    size_t pos1 = buffer.find("|", 0);
+    if(std::string::npos == pos1)
+    {
+        printf("punching format error\n");
+        return;
+    }
+    std::string self_name       = buffer.substr(0, pos1++);
+    std::string punching_name   = buffer.substr(pos1);
+
+    auto iter_self = g_name_info.find(self_name);
+    if(g_name_info.end() == iter_self)
+    {
+        printf("client not Register\n");
+        return;
+    }
+
+    auto iter = g_name_info.find(punching_name);
+    if(g_name_info.end() == iter)
+    {
+        printf("punching name not Register\n");
+        return;
+    }
+
+    //punching format lan_ip|lan_port|wan_ip|wan_port
+    std::string msg = iter->second.lan_ip + "|" + iter->second.lan_port + "|" + iter->second.wan_ip + "|" + iter->second.wan_port;
+    std::string msg1 = iter_self->second.lan_ip + "|" + iter_self->second.lan_port + "|" + iter_self->second.wan_ip + "|" + iter_self->second.wan_port;
+    printf("punching msg:%s\n", msg.c_str());
+    printf("punching msg self:%s\n", msg1.c_str());
+
+    struct sockaddr_in addr;
+    bzero(&addr, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(std::atoi(iter->second.wan_port.c_str()));
+    inet_pton(AF_INET, iter->second.wan_ip.c_str(), &addr.sin_addr);
+
+    socklen_t len = sizeof(sockaddr_in);
+    if(0 > sendto(fd, msg.data(), msg.size()+1, 0, (sockaddr*)&peer_addr, len))
+    {
+        perror("send to error");
+        return;
+    }
+
+    if(0 > sendto(fd, msg1.data(), msg1.size()+1, 0, (sockaddr*)&addr, len))
+    {
+        perror("send to error1");
+        return;
+    }
+
+    return;
+}
+//---------------------------------------------------------------------------
+void CMD_Dsipatch(int fd, const std::string& buffer, struct sockaddr_in& peer_addr)
+{
+    size_t pos = buffer.find("|", 0);
+    if(std::string::npos == pos)
+    {
+        printf("error cmd\n");
+        return;
+    }
+
+    char buf_ip[8];
+    char buf_port[INET_ADDRSTRLEN];
+    sprintf(buf_port, "%u", ntohs(peer_addr.sin_port));
+    inet_ntop(AF_INET, &peer_addr.sin_addr, buf_ip, INET_ADDRSTRLEN);
+    printf("peer client ip:%s, port:%s\n", buf_ip, buf_port);
+    printf("msg:%s\n", buffer.c_str());
+
+    std::string cmd = buffer.substr(0, pos);
+    std::string buf = buffer.substr(pos+1);
+    if(cmd == "register")
+    {
+        AddClient(buf, buf_ip, buf_port);
+    }
+    else if(cmd == "punching")
+    {
+        Punching(fd, buf, peer_addr);
+    }
+
+    return;
+}
+//---------------------------------------------------------------------------
 int main(int , char** )
 {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -88,40 +173,33 @@ int main(int , char** )
     struct sockaddr_in local_addr;
     bzero(&local_addr, sizeof(struct sockaddr_in));
     local_addr.sin_family       = AF_INET;
-    local_addr.sin_port         = htons(9981);
+    local_addr.sin_port         = htons(PORT);
     inet_pton(AF_INET, IP, &local_addr.sin_addr);
 
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void*)&opt, sizeof(opt));
 
-    if(-1 == bind(fd, (struct sockaddr*)&local_addr, sizeof(struct sockaddr*)))
+    if(-1 == bind(fd, (struct sockaddr*)&local_addr, sizeof(struct sockaddr)))
     {
         perror("bind:");
         return 1;
     }
 
 
-    char                buf_ip[8];
-    char                buf_port[INET_ADDRSTRLEN];
-    socklen_t           addr_len;
-    char                buffer[BUF_LEN];
     struct sockaddr_in  peer_addr;
+    socklen_t           addr_len = sizeof(struct sockaddr_in);
+    char                buffer[BUF_LEN];
     while(true)
     {
-        int rcv_len = recvfrom(fd, static_cast<void*>(buffer), 0, BUF_LEN, (struct sockaddr*)&peer_addr, &addr_len);
+        int rcv_len = recvfrom(fd, static_cast<void*>(buffer), BUF_LEN, 0, (struct sockaddr*)&peer_addr, &addr_len);
         if(0 >= rcv_len)
         {
             perror("recv_from:");
             return 1;
         }
 
-        sprintf(buf_port, "%u", ntohs(peer_addr.sin_port));
-        inet_ntop(AF_INET, &peer_addr, buf_ip, INET_ADDRSTRLEN);
-        printf("peer client ip:%s, port:%s\n", buf_ip, buf_port);
-
-        AddClient(buffer, buf_ip, buf_port);
+        CMD_Dsipatch(fd, buffer, peer_addr);
     }
-
 
     return 0;
 }
